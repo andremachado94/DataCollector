@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation. All rights reserved.
+﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
 using System;
@@ -6,6 +6,7 @@ using System.Linq;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Bot.Builder;
+using Microsoft.Bot.Builder.Dialogs;
 using Microsoft.Bot.Builder.Integration;
 using Microsoft.Bot.Builder.Integration.AspNet.Core;
 using Microsoft.Bot.Configuration;
@@ -15,7 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Microsoft.BotBuilderSamples
+namespace DataCollectionBot
 {
     /// <summary>
     /// The Startup class configures services and the request pipeline.
@@ -28,7 +29,6 @@ namespace Microsoft.BotBuilderSamples
         public Startup(IHostingEnvironment env)
         {
             _isProduction = env.IsProduction();
-
             var builder = new ConfigurationBuilder()
                 .SetBasePath(env.ContentRootPath)
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
@@ -55,32 +55,14 @@ namespace Microsoft.BotBuilderSamples
         /// <seealso cref="https://docs.microsoft.com/en-us/azure/bot-service/bot-service-manage-channels?view=azure-bot-service-4.0"/>
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddBot<EchoWithCounterBot>(options =>
+            services.AddBot<SimpleBot>(options =>
             {
-                // Creates a logger for the application to use.
-                ILogger logger = _loggerFactory.CreateLogger<EchoWithCounterBot>();
-
                 var secretKey = Configuration.GetSection("botFileSecret")?.Value;
                 var botFilePath = Configuration.GetSection("botFilePath")?.Value;
 
                 // Loads .bot configuration file and adds a singleton that your Bot can access through dependency injection.
-                BotConfiguration botConfig = null;
-                try
-                {
-                    botConfig = BotConfiguration.Load(botFilePath ?? @".\BotConfiguration.bot", secretKey);
-                }
-                catch
-                {
-                    var msg = @"Error reading bot file. Please ensure you have valid botFilePath and botFileSecret set for your environment.
-    - You can find the botFilePath and botFileSecret in the Azure App Service application settings.
-    - If you are running this bot locally, consider adding a appsettings.json file with botFilePath and botFileSecret.
-    - See https://aka.ms/about-bot-file to learn more about .bot file its use and bot configuration.
-    ";
-                    logger.LogError(msg);
-                    throw new InvalidOperationException(msg);
-                }
-
-                services.AddSingleton(sp => botConfig);
+                var botConfig = BotConfiguration.Load(botFilePath ?? @".\BotConfiguration.bot", secretKey);
+                services.AddSingleton(sp => botConfig ?? throw new InvalidOperationException($"The .bot config file could not be loaded. ({botConfig})"));
 
                 // Retrieve current endpoint.
                 var environment = _isProduction ? "production" : "development";
@@ -91,6 +73,9 @@ namespace Microsoft.BotBuilderSamples
                 }
 
                 options.CredentialProvider = new SimpleCredentialProvider(endpointService.AppId, endpointService.AppPassword);
+
+                // Creates a logger for the application to use.
+                ILogger logger = _loggerFactory.CreateLogger<SimpleBot>();
 
                 // Catches any errors that occur during a conversation turn and logs them.
                 options.OnTurnError = async (context, exception) =>
@@ -117,7 +102,7 @@ namespace Microsoft.BotBuilderSamples
                 //    throw new InvalidOperationException($"The .bot file does not contain an blob storage with name '{StorageConfigurationId}'.");
                 // }
                 // // Default container name.
-                // const string DefaultBotContainer = "botstate";
+                // const string DefaultBotContainer = "<DEFAULT-CONTAINER>";
                 // var storageContainer = string.IsNullOrWhiteSpace(blobStorageConfig.Container) ? DefaultBotContainer : blobStorageConfig.Container;
                 // IStorage dataStore = new Microsoft.Bot.Builder.Azure.AzureBlobStorage(blobStorageConfig.ConnectionString, storageContainer);
 
@@ -130,7 +115,7 @@ namespace Microsoft.BotBuilderSamples
 
             // Create and register state accesssors.
             // Acessors created here are passed into the IBot-derived class on every turn.
-            services.AddSingleton<EchoBotAccessors>(sp =>
+            services.AddSingleton<BotAccessors>(sp =>
             {
                 var options = sp.GetRequiredService<IOptions<BotFrameworkOptions>>().Value;
                 if (options == null)
@@ -146,9 +131,12 @@ namespace Microsoft.BotBuilderSamples
 
                 // Create the custom state accessor.
                 // State accessors enable other components to read and write individual properties of state.
-                var accessors = new EchoBotAccessors(conversationState)
+                var accessors = new BotAccessors(conversationState)
                 {
-                    CounterState = conversationState.CreateProperty<CounterState>(EchoBotAccessors.CounterStateName),
+                    DialogStateAccessor = conversationState.CreateProperty<DialogState>(BotAccessors.DialogStateAccessorName),
+                    CounterStateStateAccessor = conversationState.CreateProperty<CounterState>(BotAccessors.CounterStateAccessorName),
+                    WelcomeStateAccessor = conversationState.CreateProperty<WelcomeUserState>(BotAccessors.WelcomeUserAccessorName),
+                    CurrentQuestionStateAccessor = conversationState.CreateProperty<CurrentQuestionState>(BotAccessors.CurrentQuestionAccessorName),
                 };
 
                 return accessors;

@@ -1,7 +1,7 @@
-// Copyright (c) Microsoft Corporation. All rights reserved.
+﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-namespace Microsoft.BotBuilderSamples
+namespace DataCollectionBot
 {
     /// <summary>
     /// Stores counter state for the conversation.
@@ -14,6 +14,6 @@ namespace Microsoft.BotBuilderSamples
         /// Gets or sets the number of turns in the conversation.
         /// </summary>
         /// <value>The number of turns in the conversation.</value>
-        public int TurnCount { get; set; } = 0;
+        public int CurrentQuestion { get; set; } = 0;
     }
 }
